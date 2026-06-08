@@ -81,6 +81,28 @@ Science misinformation spreads mainly through social media, yet existing benchma
 
 ---
 
+## Repository Structure
+
+```
+NLP-Group-Project/
+├── README.md
+├── Group_Assignment.pdf
+├── NLP Proposal - Group 5.html
+│
+├── replication/              # Lea — pipeline code, SCIFACT run, deviations log
+│
+├── data/
+│   ├── english/              # Mateus — 30 English posts, annotation guidelines, spreadsheet
+│   └── spanish/              # Claudia — 30 Spanish posts, annotation guidelines, spreadsheet
+│       └── Annotation_Guidelines_Spanish_Tweets.md
+│
+├── pipeline/                 # Andrea — extension pipeline scripts, results, failure taxonomy
+│
+└── report/                   # Dalton — report drafts, slides, mini-survey, executive summary
+```
+
+---
+
 ## Tags
 
 `EACL 2024` · `Fact-checking` · `Social media` · `English · Spanish` · `SCIFACT` · `Misinformation`
