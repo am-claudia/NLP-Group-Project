@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NLP Project Proposal</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:    #0f0f14;
+    --paper:  #f7f5f0;
+    --accent: #2d4af7;
+    --rule:   #d8d4ca;
+    --muted:  #888070;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+  }
+
+  /* ── Layout ── */
+  .page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 72px 32px 96px;
+  }
+
+  /* ── Header ── */
+  header {
+    margin-bottom: 56px;
+    opacity: 0;
+    animation: rise .6s ease forwards;
+  }
+
+  .eyebrow {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+
+  h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(28px, 5vw, 42px);
+    line-height: 1.15;
+    letter-spacing: -.01em;
+    margin-bottom: 12px;
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 300;
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--rule);
+    margin: 32px 0;
+  }
+
+  /* ── Sections ── */
+  section {
+    margin-bottom: 44px;
+    opacity: 0;
+    animation: rise .5s ease forwards;
+  }
+
+  section:nth-child(1) { animation-delay: .10s }
+  section:nth-child(2) { animation-delay: .18s }
+  section:nth-child(3) { animation-delay: .26s }
+  section:nth-child(4) { animation-delay: .34s }
+  section:nth-child(5) { animation-delay: .42s }
+  section:nth-child(6) { animation-delay: .50s }
+
+  h2 {
+    font-family: 'DM Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  p {
+    font-size: 15px;
+    line-height: 1.7;
+    font-weight: 300;
+    color: #2a2820;
+  }
+
+  ul {
+    list-style: none;
+    margin-top: 8px;
+  }
+
+  ul li {
+    font-size: 15px;
+    line-height: 1.65;
+    font-weight: 300;
+    color: #2a2820;
+    padding: 6px 0 6px 20px;
+    border-bottom: 1px solid var(--rule);
+    position: relative;
+  }
+
+  ul li:first-child { border-top: 1px solid var(--rule); }
+
+  ul li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    font-size: 12px;
+    top: 8px;
+  }
+
+  /* ── Callout ── */
+  .callout {
+    border-left: 2px solid var(--accent);
+    padding: 14px 20px;
+    background: #eef1fe;
+    margin-top: 16px;
+    border-radius: 0 4px 4px 0;
+  }
+
+  .callout p {
+    font-size: 14px;
+    color: #1a2560;
+  }
+
+  /* ── Paper reference ── */
+  .paper-ref {
+    display: inline-block;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 6px 12px;
+    border-radius: 3px;
+    margin-bottom: 14px;
+    letter-spacing: .02em;
+  }
+
+  /* ── Tags ── */
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    border: 1px solid var(--rule);
+    padding: 4px 10px;
+    border-radius: 100px;
+    color: var(--muted);
+  }
+
+  /* ── Footer ── */
+  footer {
+    margin-top: 72px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: .06em;
+    opacity: 0;
+    animation: rise .5s .55s ease forwards;
+  }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="eyebrow">NLP Group Project · Option 3</div>
+    <h1>Replication &amp; Extension<br><em>in Two Languages</em></h1>
+    <div class="meta">June 2026</div>
+  </header>
+
+  <section>
+    <h2>The Paper</h2>
+    <span class="paper-ref">Vladika &amp; Matthes · EACL 2024</span>
+    <p><em>Comparing Knowledge Sources for Open-Domain Scientific Claim Verification.</em> We chose this paper because it has clean benchmark results on SCIFACT, public code that runs, and is already cited by follow-up work — a reliable replication target.</p>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Replication</h2>
+    <p>We reproduce the main result: retrieval-augmented claim verification on the SCIFACT test set using the best-performing knowledge source from the paper. We report F1, document any deviations, and compare our numbers against the published figures.</p>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Extension</h2>
+    <p>We build a new test set of ~60 social media posts and run the same pipeline on them.</p>
+    <ul>
+      <li><strong>30 English + 30 Spanish</strong> posts from Twitter/X and Reddit</li>
+      <li>Labels: <strong>True / False / Unverifiable</strong>, two annotators, Cohen's κ reported</li>
+      <li>Spanish posts machine-translated before retrieval — controlled comparison</li>
+      <li>Qualitative failure taxonomy alongside quantitative results</li>
+    </ul>
+    <div class="callout">
+      <p><strong>Core question:</strong> How much does performance drop when the pipeline — built for formal scientific claims — faces informal, noisy social media text? Does it differ between English and Spanish?</p>
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Why it matters</h2>
+    <p>Science misinformation spreads mainly through social media, yet existing benchmarks use curated formal claims. We measure the gap. The Spanish angle has not been tested with this pipeline — genuinely new ground. Long-term vision: a browser extension that checks claims as you scroll.</p>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Deliverables</h2>
+    <ul>
+      <li>Technical report with replication results, extension results, mini-survey &amp; critical assessment</li>
+      <li>60 annotated social media posts + annotation guidelines</li>
+      <li>Code repository: replication + extension scripts, README</li>
+      <li>Slides for 20-minute presentation + individual reflections</li>
+    </ul>
+  </section>
+
+  <div class="tags">
+    <span class="tag">EACL 2024</span>
+    <span class="tag">Fact-checking</span>
+    <span class="tag">Social media</span>
+    <span class="tag">English · Spanish</span>
+    <span class="tag">SCIFACT</span>
+    <span class="tag">Misinformation</span>
+  </div>
+
+  <footer>Option 3: Replication &amp; Extension · NLP Course · June 2026</footer>
+
+</div>
+</body>
+</html>
