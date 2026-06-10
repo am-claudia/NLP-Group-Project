@@ -13,7 +13,16 @@ We chose this paper because it has clean benchmark results on SCIFACT, public co
 ## What We Do
 
 ### Replication
-We reproduce the main result: retrieval-augmented claim verification on the SCIFACT test set using the best-performing knowledge source from the paper. We report F1, document any deviations, and compare our numbers against the published figures.
+
+We reproduce the main results across two complementary approaches:
+
+**Approach 1 — Step-3-only (`reproduction/step3-only/`):**
+The paper's authors provided pre-computed retrieval results (BM25 and Semantic Search over Wikipedia and PubMed). We load these directly and run only Step 3 (DeBERTa-v3-large NLI verdict prediction) with corrected label normalisation. This isolates the NLI component and validates our reproduction against the paper's reported F1 scores.
+
+**Approach 2 — Full API pipeline (`reproduction/api-pipeline/`):**
+We re-run the complete three-step pipeline (retrieval → evidence selection → verdict prediction) from scratch, replacing the paper's local 6.6M-article Wikipedia dump and 20.6M-abstract MEDLINE dump with the **Wikipedia Python API** and **NCBI PubMed E-utilities API**. This produces independently retrieved evidence and tests the pipeline end-to-end.
+
+Both approaches are compared against the paper's published F1 scores (Tables 3 & 4 of Vladika & Matthes 2024).
 
 ### Extension
 We build a new test set of ~60 social media posts and run the same pipeline on them.
@@ -50,7 +59,7 @@ We build a new test set of ~60 social media posts and run the same pipeline on t
 
 Disagreements were resolved by discussion and assigned a final Gold Label. Disagreement codes used: `EVIDENCE` (conflicting or differently-weighted evidence).
 
-Spanish posts were machine-translated to English (see `MT Translation (EN)` column in `Spanish_Tweets_Annotated.xlsx`) before being passed to the pipeline.
+Spanish posts were machine-translated to English (see `MT Translation (EN)` column in `data/spanish/Spanish_Tweets_Annotated.xlsx`) before being passed to the pipeline.
 
 Pipeline predictions are pending — the `Pipeline Prediction` column will be filled after Andrea runs the extension pipeline.
 
@@ -68,6 +77,117 @@ Science misinformation spreads mainly through social media, yet existing benchma
 
 ---
 
+## Repository Structure
+
+```
+NLP-Group-Project/
+│
+├── data/                          # All datasets — shared across notebooks
+│   ├── scifact_no-nei_dataset.csv
+│   ├── pubmedqa.json
+│   ├── healthFC_annotated.csv
+│   ├── CoVERT_FC_annotations.jsonl
+│   ├── Annotation_Guidelines_Bilingual.md
+│   └── spanish/
+│       └── Spanish_Tweets_Annotated.xlsx
+│
+├── reference/                     # Original paper code and evidence — read-only, not modified
+│   ├── code/
+│   │   ├── open_domain_claim_verification.ipynb        # paper's full pipeline
+│   │   └── open_domain_claim_verification_small_sample.ipynb
+│   └── evidence/                  # Pre-computed retrieval results provided by the paper's authors
+│       ├── Google/
+│       ├── PubMed/
+│       │   ├── BM25 Search/
+│       │   └── Semantic Search/
+│       └── Wikipedia/
+│           ├── BM25 Search/
+│           └── Semantic Search/
+│
+├── reproduction/                  # Our reproduction experiments
+│   │
+│   ├── step3-only/                # Replication approach 1:
+│   │   │                          # Loads the pre-computed evidence from reference/evidence/,
+│   │   │                          # applies corrected label normalisation, and runs only
+│   │   │                          # Step 3 (DeBERTa NLI). Fast to run — no retrieval needed.
+│   │   ├── open_domain_claim_verification_step3_only.ipynb
+│   │   └── results/               # metrics.csv + Excel comparison tables per source
+│   │
+│   └── api-pipeline/              # Replication approach 2:
+│       │                          # Full end-to-end pipeline (Steps 1–3) using public APIs
+│       │                          # instead of the paper's local dumps:
+│       │                          #   Step 1 — Wikipedia API / NCBI PubMed E-utilities
+│       │                          #   Step 2 — SPICED sentence similarity (unchanged)
+│       │                          #   Step 3 — DeBERTa NLI (unchanged)
+│       ├── open_domain_claim_verification_api.ipynb
+│       ├── comparison/            # Cross-notebook comparison outputs
+│       └── results/
+│           ├── Wikipedia API/     # metrics.csv + retrieved evidence lines
+│           └── PubMed API/        # metrics.csv + retrieved evidence lines
+│
+├── pipeline/                      # Tweet verification pipeline (to be built — Andrea)
+│                                  # Will run the best-performing configuration from
+│                                  # reproduction/ on the 60 English/Spanish social media posts
+│
+└── documentation/
+    ├── 2024.eacl-long.128.pdf     # Reference paper
+    ├── step3_notebook_notes.md    # Data issues, label normalisation, fixes log
+    ├── technical_report.md
+    ├── Group_Assignment.pdf
+    └── NLP Proposal - Group 5.html
+```
+
+### How the pieces fit together
+
+| Folder | Purpose | Status |
+|--------|---------|--------|
+| `reference/` | Paper's original code and pre-computed evidence. Not modified. | Done |
+| `reproduction/step3-only/` | Replication approach 1: NLI only on paper's evidence, corrected labels. | Done |
+| `reproduction/api-pipeline/` | Replication approach 2: full pipeline re-run via public APIs. | Done |
+| `pipeline/` | Extension: run on 60 tweet dataset. | To do |
+
+---
+
+## API Keys
+
+The API pipeline notebook (`reproduction/api-pipeline/open_domain_claim_verification_api.ipynb`) uses two external APIs. Credentials are loaded from a `.env` file that **must never be committed** (it is in `.gitignore`).
+
+### Setup
+
+1. Copy the example file and fill in your values:
+   ```
+   cp .env.example .env
+   ```
+   On **Google Colab**: upload `.env` to the Colab file browser (`/content/.env`) at the start of each session — the notebook picks it up automatically.
+
+2. Fill in the values below.
+
+---
+
+### Google Custom Search API (required for Google section)
+
+Free tier: **100 queries/day**. Running all 4 datasets requires ~2,174 queries.
+
+| Step | Instructions |
+|------|-------------|
+| 1. Create a project | [console.developers.google.com](https://console.developers.google.com) → New Project |
+| 2. Enable the API | Search for **Custom Search API** → Enable |
+| 3. Get an API key | Credentials → Create Credentials → API Key → copy into `GOOGLE_API_KEY` |
+| 4. Create a search engine | [programmablesearchengine.google.com](https://programmablesearchengine.google.com) → Add → set "Search the entire web" → copy the **Search engine ID** into `GOOGLE_CSE_ID` |
+
+---
+
+### NCBI E-utilities (required for PubMed API section)
+
+Free, no billing required.
+
+| Field | Instructions |
+|-------|-------------|
+| `NCBI_EMAIL` | Any valid email address — required by NCBI's terms of use |
+| `NCBI_API_KEY` | Optional. Register at [ncbi.nlm.nih.gov/account](https://www.ncbi.nlm.nih.gov/account/) to get a free key. Raises the rate limit from 3 to 10 requests/second (~3× faster retrieval). |
+
+---
+
 ## Team & Roles
 
 | Member | Role |
@@ -79,9 +199,8 @@ Science misinformation spreads mainly through social media, yet existing benchma
 | **Dalton** | Literature, Report & Presentation |
 
 ### Lea — Replication Lead
-- Set up the shared repo, clone the paper's code, check GitHub issues
-- Run the pipeline on the SCIFACT test set and reproduce the F1 score from the paper
-- Document every deviation, assumption, or environment fix needed to get it running
+- Set up the shared repo, replicate the paper's pipeline, document deviations
+- Run both reproduction notebooks and compare results against published figures
 - Write the Replication section of the report (our numbers vs. published numbers)
 
 ### Mateus — Data & Annotation (English)
@@ -97,8 +216,8 @@ Science misinformation spreads mainly through social media, yet existing benchma
 - Cross-annotate a shared sample with Mateus for Cohen's κ
 
 ### Andrea — Extension Pipeline & Analysis
-- Run the pipeline on the full 60-post dataset
-- Report quantitative results (F1, accuracy) for English vs. Spanish vs. SCIFACT baseline
+- Run the pipeline on the full 60-post dataset using `pipeline/`
+- Report quantitative results (F1, accuracy) for English vs. Spanish vs. benchmark baseline
 - Build the failure taxonomy: at least 5–10 documented failure cases with hypotheses for why they fail
 - Write the Extension Results and Failure Analysis sections of the report
 
@@ -107,28 +226,6 @@ Science misinformation spreads mainly through social media, yet existing benchma
 - Write the Critical Assessment and Open Questions sections based on empirical findings
 - Build the slides and lead the 20-minute in-class presentation; organise a rehearsal
 - Write the one-page executive summary for a non-technical reader
-
----
-
-## Repository Structure
-
-```
-NLP-Group-Project/
-├── README.md
-├── Group_Assignment.pdf
-├── NLP Proposal - Group 5.html
-│
-├── replication/              # Lea — pipeline code, SCIFACT run, deviations log
-│
-├── data/
-│   ├── english/              # Mateus — 30 English posts, annotation guidelines, spreadsheet
-│   └── spanish/              # Claudia — 30 Spanish posts, annotation guidelines, spreadsheet
-│       └── Annotation_Guidelines_Spanish_Tweets.md
-│
-├── pipeline/                 # Andrea — extension pipeline scripts, results, failure taxonomy
-│
-└── report/                   # Dalton — report drafts, slides, mini-survey, executive summary
-```
 
 ---
 

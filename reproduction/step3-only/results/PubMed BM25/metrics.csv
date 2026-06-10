@@ -1,0 +1,5 @@
+dataset,precision,recall,f1,accuracy
+scifact,79.8,72.6,76.0,69.8
+pubmedqa,66.2,70.8,68.4,59.4
+healthfc,63.9,77.2,70.0,59.0
+covert,75.6,82.8,79.0,67.0

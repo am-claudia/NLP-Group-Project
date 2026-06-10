@@ -1,0 +1,136 @@
+# Reproduction Overview
+
+**NLP Group Project — Vladika & Matthes (EACL 2024)**
+*Open-Domain Scientific Claim Verification — Reproduction Results*
+
+---
+
+## 1. The Two Reproduction Runs
+
+### Run 1 — Step-3-Only (`reproduction/step3-only/`)
+
+Loads the pre-computed retrieval results provided by the paper's authors (`reference/evidence/`) and runs only **Step 3: Verdict Prediction** using DeBERTa-v3-large NLI. No retrieval or evidence selection is re-run.
+
+Evidence sources available: Wikipedia BM25, Wikipedia Semantic, PubMed BM25, PubMed Semantic, Google.
+
+**Datasets:** SciFact (693), PubMedQA (890), HealthFC (327), CoVERT (264) — after filtering NEI-labelled claims.
+
+**Purpose:** Validates our reproduction of the NLI component and label normalisation against the paper's published F1 scores (Tables 3 & 4).
+
+---
+
+### Run 2 — API Pipeline (`reproduction/api-pipeline/`)
+
+Re-runs the **full three-step pipeline** from scratch using public APIs instead of the paper's local data dumps:
+
+- **Step 1 — Document Retrieval:** Wikipedia Python API (replaces the paper's local 6.6M-article Wikipedia dump); NCBI PubMed E-utilities (replaces the paper's 20.6M-abstract MEDLINE dump)
+- **Step 2 — Evidence Selection:** SPICED sentence similarity, top-10 sentences (unchanged from paper)
+- **Step 3 — Verdict Prediction:** DeBERTa-v3-large NLI (unchanged from paper)
+
+**Purpose:** Tests the pipeline end-to-end with independently retrieved evidence. Results are not expected to match exactly — different corpus coverage and retrieval method.
+
+---
+
+## 2. Changes from the Original Notebook
+
+The original paper notebook (`reference/code/open_domain_claim_verification.ipynb`) required a local environment with large pre-downloaded corpora. Our reproduction notebooks make the following changes:
+
+### Google Colab Compatibility
+- Added `RUNNING_ON_COLAB` detection to toggle between Colab (Google Drive paths) and local paths automatically
+- Google Drive is mounted when running on Colab; local relative paths are used otherwise
+- Hardcoded paths replaced with configurable `BASE_PATH`, `DATASETS_PATH`, `RESULTS_PATH` variables at the top of each notebook
+
+### Metrics Saving
+- Added `save_metrics()` helper that writes F1 and accuracy per dataset to a `metrics.csv` file after each run
+- Added `load_metrics()` helper to reload saved results — allows the comparison cell to run independently without re-running NLI
+- Results also exported as `.xlsx` files for easier inspection and comparison with the paper's tables
+- Added **resume points** in the API pipeline notebook: if the session restarts mid-run, already-retrieved lines are reloaded from disk rather than re-queried (Wikipedia retrieval takes ~60–90 min)
+
+### Label Normalisation Fixes
+The original notebook did not explicitly normalise labels for all datasets. We added:
+
+| Dataset | Original labels | Normalised to |
+|---------|----------------|---------------|
+| HealthFC | `0` (false), `2` (true) | `0` (REFUTED), `1` (SUPPORTED) |
+| PubMedQA | `"yes"`, `"no"` | `1` (SUPPORTED), `0` (REFUTED) |
+| CoVERT | `"SUPPORTS"`, `"REFUTES"` | `1`, `0` |
+| SciFact | already binary | unchanged |
+
+Additionally, CoVERT labels had a leading whitespace issue after `@username` removal — fixed with `.str.strip()`.
+
+### BM25 Alignment Fix
+The pre-computed BM25 files were generated from the full dataset including NEI-labelled claims. After filtering NEI claims out, the row count no longer matched the dataset. Added `align_entries_to_claims()` to re-align BM25 evidence lines to the filtered claim list by matching claim text.
+
+### Code Cleanup
+- All imports consolidated at the top of each notebook
+- Repeated retrieval loops replaced with a single `load_source(base_path, files_dict)` helper
+- Removed Google Custom Search API code from the API pipeline notebook (Google section only in step3-only)
+- No duplication of work between cells
+
+---
+
+## 3. Results
+
+F1 scores (binary, `average='binary'`). Paper values from Tables 3 & 4 of Vladika & Matthes (2024).
+
+### Run 1 — Step-3-Only: Wikipedia Evidence
+
+| Dataset | BM25 Paper | BM25 Ours | Semantic Paper | Semantic Ours |
+|---------|-----------|-----------|----------------|---------------|
+| SciFact | 74.8 | 74.8 | 75.4 | 75.4 |
+| PubMedQA | 73.1 | 70.4 | 73.2 | 72.1 |
+| HealthFC | 73.1 | 73.1 | 76.5 | 76.5 |
+| CoVERT | 75.2 | 80.4 | 82.5 | 82.5 |
+| **Average** | **74.0** | **74.7** | **76.9** | **76.6** |
+
+### Run 1 — Step-3-Only: PubMed Evidence
+
+| Dataset | BM25 Paper | BM25 Ours | Semantic Paper | Semantic Ours |
+|---------|-----------|-----------|----------------|---------------|
+| SciFact | 76.1 | 76.0 | 76.8 | 76.8 |
+| PubMedQA | 70.3 | 68.4 | 74.5 | 70.8 |
+| HealthFC | 69.7 | 70.0 | 72.0 | 74.5 |
+| CoVERT | 79.5 | 79.0 | 76.2 | 77.8 |
+| **Average** | **73.9** | **73.4** | **74.9** | **75.0** |
+
+### Run 1 — Step-3-Only: Google Evidence
+
+| Dataset | Paper | Ours |
+|---------|-------|------|
+| SciFact | 82.7 | 72.6 |
+| PubMedQA | 78.5 | 58.7 |
+| HealthFC | 74.5 | 74.2 |
+| CoVERT | 72.3 | 54.0 |
+| **Average** | **77.0** | **64.9** |
+
+> Note: Google results are notably lower than the paper. The Google Custom Search API returns different results from the paper's Google Scholar search used during the original experiment.
+
+---
+
+### Run 2 — API Pipeline: Wikipedia API
+
+| Dataset | Paper (BM25) | Wikipedia API Ours |
+|---------|--------------|--------------------|
+| SciFact | 74.8 | 78.1 |
+| PubMedQA | 73.1 | 72.5 |
+| HealthFC | 73.1 | 74.5 |
+| CoVERT | 75.2 | 68.0 |
+| **Average** | **74.0** | **73.3** |
+
+### Run 2 — API Pipeline: PubMed API
+
+| Dataset | Paper (BM25) | PubMed API Ours |
+|---------|--------------|-----------------|
+| SciFact | 76.1 | *(pending)* |
+| PubMedQA | 70.3 | *(pending)* |
+| HealthFC | 69.7 | *(pending)* |
+| CoVERT | 79.5 | *(pending)* |
+
+---
+
+## 4. Key Observations
+
+- **Step-3-only results closely match the paper** for Wikipedia and PubMed BM25/Semantic, confirming our label normalisation and NLI setup are correct.
+- **Wikipedia API pipeline** results are broadly comparable to the paper's Wikipedia BM25 baseline, with some variation per dataset — expected given different corpus coverage and retrieval method.
+- **Google results diverge substantially** from the paper. The Custom Search API does not replicate Google Scholar results used in the original study.
+- PubMed API pipeline results are pending.
