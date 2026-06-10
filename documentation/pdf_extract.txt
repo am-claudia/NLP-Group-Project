@@ -1,0 +1,834 @@
+--- PAGE 1 ---
+Proceedings of the 18th Conference of the European Chapter of the Association for Computational Linguistics
+V olume 1: Long Papers, pages 2103–2114
+March 17-22, 2024 c⃝2024 Association for Computational Linguistics
+Comparing Knowledge Sources for Open-Domain
+Scientific Claim Verification
+Juraj Vladika and Florian Matthes
+Department of Computer Science
+Technical University of Munich
+Garching, Germany
+{juraj.vladika, matthes}@tum.de
+Abstract
+The increasing rate at which scientific knowl-
+edge is discovered and health claims shared
+online has highlighted the importance of devel-
+oping efficient fact-checking systems for scien-
+tific claims. The usual setting for this task in
+the literature assumes that the documents con-
+taining the evidence for claims are already pro-
+vided and annotated or contained in a limited
+corpus. This renders the systems unrealistic for
+real-world settings where knowledge sources
+with potentially millions of documents need to
+be queried to find relevant evidence. In this pa-
+per, we perform an array of experiments to test
+the performance of open-domain claim verifi-
+cation systems. We test the final verdict predic-
+tion of systems on four datasets of biomedical
+and health claims in different settings. While
+keeping the pipeline’s evidence selection and
+verdict prediction parts constant, document re-
+trieval is performed over three common knowl-
+edge sources (PubMed, Wikipedia, Google)
+and using two different information retrieval
+techniques. We show that PubMed works bet-
+ter with specialized biomedical claims, while
+Wikipedia is more suited for everyday health
+concerns. Likewise, BM25 excels in retrieval
+precision, while semantic search in recall of rel-
+evant evidence. We discuss the results, outline
+frequent retrieval patterns and challenges, and
+provide promising future directions.
+1 Introduction
+The fast promulgation of knowledge in the digital
+world has made keeping track of information trust-
+worthiness a challenging endeavor. In particular,
+science and health have become popular talking
+points and brought with it an abundance of medi-
+cal advice that permeate online resources (Swire-
+Thompson et al., 2020). A report by the Pew Re-
+search Center (Fox and Duggan, 2013) found that
+over one-third of American adults have searched
+the Internet for medical conditions and asked it
+Figure 1: The experimental setup of the study: scientific
+claims are passed through a fixed pipeline using three
+different knowledge sources, resulting in different final
+prediction performance (as measured by F1 score).
+medical questions before going to a medical pro-
+fessional. The sought information ranged from
+self-diagnosis to finding medications.
+Automated solutions for claim verification based
+on Natural Language Processing (NLP) have
+emerged as a potential aid to help with bringing
+light into the information overload (Nakov et al.,
+2021). While most work in the automated fact-
+checking domain is concerned with claims related
+to politics, society, rumors, and general misinfor-
+mation, there has been an increasing interest in
+fact-checking of scientific and biomedical claims
+(Kotonya and Toni, 2020; Wright et al., 2022b).
+2103
+
+--- PAGE 2 ---
+The task of automated claim verification consists of
+retrieving evidence for a claim being checked and
+then predicting a veracity label based on the discov-
+ered evidence. The most common setting for this
+task either already provides the source document
+that will contain evidence for the claim or works
+over a limited, manually constructed collection of
+documents (Saakyan et al., 2021). While this is
+an important step in developing models capable of
+reading comprehension and detecting which spans
+provide evidence in a given context, this is not a
+realistic setting for automated claim verification
+systems deployed in the real world. In such a sce-
+nario, the documents containing evidence are not
+known and knowledge bases containing them can
+possibly contain millions of documents. Moreover,
+with the rise of medical assistants and conversa-
+tional agents in healthcare, many users are turning
+to these systems as a source of health-related infor-
+mation and medical support (Valizadeh and Parde,
+2022).
+To address these research gaps, we perform an
+array of experiments that test the performance of
+NLP systems for claim verification in the open do-
+main. In the experiments, we keep the parts of
+the verification pipeline concerned with evidence
+sentence selection and verdict prediction fixed,
+and vary the knowledge source being used and
+information retrieval techniques being deployed to
+query the databases. Since the final goal of fact-
+verification systems is to provide a verdict on the
+correctness of a claim, we measure the usefulness
+of knowledge sources and retrieval techniques by
+looking at verdict prediction scores. For this pur-
+pose, we leverage four English datasets of biomedi-
+cal and health claims that contain gold annotations
+stemming from domain experts. We use the verac-
+ity labels of claims in datasets as ground truth.
+We opt for three large-scale knowledge sources:
+PubMed, the cardinal collection of biomedical re-
+search publications; Wikipedia, as the largest pub-
+licly curated encyclopedia of human knowledge;
+and Google search results (representing "the whole
+web"), which is a straightforward and intuitive way
+how users seek information. Finally, we perform a
+qualitative analysis of retrieved evidence for some
+interesting example claims, present the insights
+from results, and provide future directions.
+Our contributions are as follows:
+1. We test the claim verdict prediction perfor-
+mance of a fixed fact-verification system
+on four biomedical fact-checking datasets
+by using three different knowledge sources
+(PubMed, Wikipedia, Google Search).
+2. We compare the final label prediction perfor-
+mance by retrieving evidence using different
+techniques (sparse retrieval with BM25 and
+semantic search with dense vectors).
+3. We provide a qualitative error analysis of re-
+trieved evidence for different types of claims
+and provide insights and future directions for
+open-domain claim verification.
+We make the data and code of the experiments
+available in a GitHub repository.1
+2 Foundations
+2.1 Pipeline for Automated Claim Verification
+The systems for automated claim verification and
+automated fact-checking are usually modeled as
+a framework with three components, where each
+component is a well-established NLP task (Zeng
+et al., 2021). This framework is a three-component
+pipeline (Figure 1) consisting of (1) document
+retrieval; (2) evidence selection; (3) verdict pre-
+diction. We are mostly concerned with how the
+document retrieval part affects the further entail-
+ment process. That is why we fix the evidence-
+sentence selection model and the entailment predic-
+tion model. This way, the quality of the data source
+and the retrieval technique are the most important
+variables being tested. Two of these subtasks, or
+even all three (Zhang et al., 2021), can be learned
+together in a joint system with a shared represen-
+tation. For the sake of simplicity of testing, we
+choose a pipeline system that performs each task
+sequentially.
+In docu
+
+--- PAGE 4 ---
+ticles.3 For PubMed, the US National Library of
+Medicine provides MEDLINE, a snapshot of cur-
+rently available abstracts in PubMed that is updated
+once a year. We used the 2022 version found at
+their website.4 While this yields 33.4M abstracts,
+we pre-processed the data following González-
+Márquez et al. (2023) and removed non-English
+papers, papers with no abstracts, and papers with
+unfinished abstracts, which yields 20.6M abstracts.
+For Google results, we used Google’s publicly
+available Custom Search JSON API.5
+3.2 Document Retrieval Techniques
+We test the performance of two different document
+retrieval techniques, namely a sparse one and a
+dense one. Since both types of approaches are
+deployed in modern search systems, we want to
+see how much of a difference they make in find-
+ing appropriate documents that can verify a claim.
+As a representative sparse technique, we opt for
+BM25, an improvement over TF-IDF that takes
+into account term frequency, document length, and
+inverse document frequency. Despite its simplic-
+ity, it has proven to be a cornerstone of informa-
+tion retrieval approaches due to comparative per-
+formance to more sophisticated neural approaches
+(Kamphuis et al., 2020).
+Recently, with the advance of large language
+models, encoding both the claim and documents
+with dense vector embeddings and then search-
+ing most similar vectors with cosine similarity
+has proven to be a powerful retrieval method
+(Karpukhin et al., 2020). A particularly success-
+ful recent approach is SimCSE (Gao et al., 2021),
+which uses contrastive learning and entailment-
+based training to enhance similarity scoring.
+We chose a biomedical variation BioSimCSE
+(Kanakarajan et al., 2022) which fits our use case.
+For dense retrieval, we encode the entirety of
+our PubMed corpus and Wikipedia corpus with
+BioSimCSE and store the embeddings. For sparse
+retrieval, we construct an inverted index out of
+Wikipedia and PubMed corpora and later query it
+using BM25 metrics. After selecting the top 10
+documents in each method, the top 10 most similar
+sentences were taken and jointly with claim the ver-
+dict was predicted based on the entailment relation.
+3https://dumps.wikimedia.org/enwiki/20230520/
+4https://www.nlm.nih.gov/databases/download/
+pubmed_medline.html
+5https://developers.google.com/custom-search/
+v1/overview
+For Google Search, we took the top 10 returned
+Google snippets as "evidence sentences" that we
+then concatenate and use as the evidence block for
+label prediction. All the experiments were run on a
+single Nvidia V100 GPU card, in a single run. One
+run on one dataset, one knowledge source, and one
+retrieval technique costed one computation hour.
+3.3 Baseline
+To establish a baseline, we first run the system with
+the gold evidence provided with each of the four
+datasets. These are the sentences or snippets that
+were given by the annotators or creators of the re-
+spective datasets. The performance is shown in
+Table 2. It should be noted that this performance
+is different from those reported in papers introduc-
+ing these datasets because we remove the claims
+labeled with NEI and we also did not fine-tune the
+model on the datasets. This is an intentional choice
+because the idea is to test the systems in a zero-
+shot / off-the-shelf setting. We expect the results in
+our experiments to be lower than this because hav-
+ing annotated evidence is an easier setting than the
+open-domain claim verification where the evidence
+needs to be discovered.
+Gold Evidence
+Dataset Precision Recall F1 Score
+SCIFACT 77.9 88 .4 82.8
+PUBMEDQA 74.4 80 .4 77.3
+HEALTH FC 80.5 83 .4 81.9
+COVERT 80.7 86 .4 83.4
+Table 2: Results of final verdict prediction over four
+datasets using the gold evidence sentences provided
+with the datasets.
+4 Results
+Table 3 shows the performance of the claim veri-
+fication system using evidence retrieved with two
+different techniques from two different knowledge
+sources, PubMed and Wikipedia. As expected, the
+F1 scores are lower than the oracl
+
+--- PAGE 5 ---
+BM25 Semantic Search
+Source Dataset Precision Recall F1 Macro Precision Recall F1 Macro
+PUBMED
+SCIFACT 79.9 72 .6 76 .1 73 .7 80 .0 76.8
+PUBMEDQA 70.0 70 .6 70 .3 66 .7 84 .4 74.5
+HEALTH FC 62.7 78 .7 69 .7 62 .6 84 .6 72 .0
+COVERT 76.0 83 .3 79 .5 75 .6 76 .8 76 .2
+WIKIPEDIA
+SCIFACT 67.9 83 .3 74 .8 68 .8 83 .6 75 .4
+PUBMEDQA 65.3 83 .0 73 .1 68 .3 78 .5 73 .2
+HEALTH FC 62.9 87 .4 73 .1 65 .2 92 .6 76.5
+COVERT 72.4 78 .3 75 .2 78 .5 86 .8 82.5
+Table 3: Results of final verdict prediction over four datasets using evidence retrieved from PubMed and Wikipedia.
+For both knowledge sources, the evidence from
+documents retrieved using semantic search outper-
+formed the standard sparse metric BM25. Still,
+BM25 fares well compared to the relatively recent
+semantic approaches. It is also notable to observe
+in Table 3 that BM25 excels in precision more so
+than recall, always beating semantic retrieval in
+this metric. This is not too surprising consider-
+ing BM25 relies on exact keyword matching and
+is better suited for this use case. While BM25
+slightly beats the dense BioSimCSE in precision,
+it is significantly outperformed in recall in the first
+three datasets. In deeper analysis, as we will show
+in the next section, we saw the dense technique
+would more often retrieve articles talking about the
+claim content using alternate naming for diseases,
+which led to picking up more supporting arguments
+for positive claims. COVERT is the only dataset
+for which BM25 performed better in the PubMed
+setting, in both precision and recall. Considering
+the noisy nature of this dataset (tweets and infor-
+mal language), the inverse document frequency
+(idf) feature of BM25 was better at finding exact
+matches for important but rare keywords mentioned
+in the tweets and ignoring the more common but
+unimportant words. On the other hand, the poorer
+performance of the dense technique could be be-
+cause the embedding was swayed in vector space
+due to noisy irrelevant topics from tweets.
+When looking at the performance of claim ver-
+ification systems over Wikipedia in Table 3, it is
+once again apparent that dense retrieval found more
+relevant documents with better evidence and out-
+performed the sparse retrieval. Nevertheless, in
+this case, the precision of BM25 was worse than
+BioSimCSE. In general, recall in all settings was
+higher than the ones from PubMed and precision
+lower, which shows better prediction of the positive
+(supported) class but also its over-prediction.
+Google Snippets
+Dataset Precision Recall F1 Score
+SCIFACT 75.5 91 .5 82 .7
+PUBMEDQA 66.7 95 .6 78 .5
+HEALTH FC 62.3 92 .6 74 .5
+COVERT 76.4 68 .7 72 .3
+Table 4: Results of final verdict prediction over four
+datasets using evidence retrieved from "the whole web"
+(using Google).
+Another experiment consisted of querying "the
+whole web" in order to find relevant evidence for
+a verdict. This is a common setting explored as
+one of the straightforward baselines in some fact
+verification papers (Gupta and Srikumar, 2021; Hu
+et al., 2022) and it mimics how humans would be-
+gin the process of a claim checking. Table 4 reports
+on this performance. Considering the short nature
+of Google snippets, they usually do not actually
+provide "evidence" but commonly the verdict on
+the claim itself as reported on the source website
+containing the snippet.
+At first glance, the performance with Google
+search seems impressive, especially considering
+that for the two most challenging datasets, SCI-
+FACT and PUBMEDQA, the performance is im-
+proved when compared to the first two tables. A
+more careful look reveals this to be an artefact
+2107
+
+--- PAGE 6 ---
+Claim PubMed (semantic) Wikipedia (semantic)
+Can regular intake
+of vitamin C prevent
+colds? (Refuted)
+Nevertheless, given the consistent effect of vitamin C on the
+duration and severity of colds in the regular supplementation
+studies, and the low cost and safety, it may be worthwhile for
+common cold patients to test on an individual basis whether
+therapeutic vitamin C is beneficial for them. (Hemilä and Chalker,
+2013) (Supported)
+According to the most recently published Cochrane review on
+vitamin C and the common cold, one gram per day or more
+of vitamin C does not influence common cold incidence in the
+general community, i.e., it does not prevent colds. ( en wiki:
+Vitamin C and the common cold ) (Refuted)
+Can lung cancer
+screening by com-
+puted tomography
+(CT) also do harm?
+(Supported)
+Lung cancer screening with low dose computed tomography (ct)
+is the only method ever proven to reduce lung cancer-specific
+mortality in high-risk current and former cigarette smokers. We
+aim to explain why the risks associated with radiation exposure
+from lung cancer screening are very low and should not be used
+to avoid screening or dissuade... (Frank et al., 2013) (Reftued)
+Low-dose CT screening has been associated with falsely positive
+test results which may result in unneeded treatment. In a series
+of studies assessing the frequence of false positive rates, results
+reported that rates ranged from 8-49%.(en wiki: Lung cancer
+screening) (Supported)
+Can ginkgo extract
+relieve the symp-
+toms of tinnitus?
+(Refuted)
+Ginkgo biloba is a plant extract used to alleviate symptoms associ-
+ated with cognitive deficits, e.g., decreased memory performance,
+lack of concentration, decreased alertness, tinnitus, and dizziness.
+Pharmacologic studies have shown that the therapeutic effect of
+ginkgo... (Søholm, 1998) (Supported)
+Ginkgo leaf extract is commonly used as a dietary supplement,
+but there is no scientific evidence that it supports human health or
+is effective against any disease. Systematic reviews have shown
+there is no evidence for effectiveness of ginkgo in treating high
+blood pressure, menopause-related cognitive decline, tinnitus,
+post-stroke recovery, or altitude sickness. ( en wiki: Gingko
+Bilboa) (Refuted)
+The most prevalent
+adverse events to
+Semaglutide are
+gastrointestinal.
+(Supported)
+We evaluated gastrointestinal (GI) adverse events (AEs) with
+once-weekly Semaglutide 2.4 mg in adults with overweight or
+obesity and their contribution to weight loss (WL). GI AEs were
+more common with semaglutide 2.4 mg than placebo, but typ-
+ically mild-to-moderate and transient. (Wharton et al., 2022)
+(Supported)
+Possible side effects include nausea, diarrhea, vomiting, consti-
+pation, abdominal pain, headache, fatigue, indigestion/heartburn,
+dizziness, abdominal distension, belching, hypoglycemia (low
+blood glucose) in patients with type 2 diabetes, flatulence, gas-
+troenteritis, and gastroesophageal reflux disease (GERD) ( en
+wiki: Semaglutide ) (Refuted)
+Macrolides protect
+against myocardial
+infarction. (Refuted)
+Our findings indicate that macrolide antibiotics as a group are
+associated with a significant risk for MI but not for arrhythmia
+and cardiovascular mortality. (Gorelik et al., 2018) (Refuted)
+Macrolides are a class of natural products that consist of a large
+macrocyclic lactone ring to which one or more deoxy sugars,
+usually cladinose and desosamine, may be attached. (en wiki:
+Macrolide) (Supported)
+Table 5: Example claims and retrieved evidence from the two different knowledge bases, where only one of them
+provided a correct final verdict.
+of data leakage and the way these two datasets
+were constructed (a similar phenomenon already
+observed in fact-checking datasets, Glockner et al.
+(2022)). Considering that in both of them the
+claims originate from sentences actually contained
+in PubMed abstracts, Google Search is powerful
+enough to be able to find the exact sentence that was
+the origin of these claims. The two other datasets,
+HEALTH FC and C
+
+--- PAGE 7 ---
+Claim BM25 (PubMed) Semantic (PubMed)
+Do heat patches
+containing capsaicin
+help with neck pain?
+(Refuted)
+The objective of this study was to evaluate the efficacy of a hy-
+drogel patch containing capsaicin 0.1% compared with a placebo
+hydrogel patch without capsaicin to treat chronic myofascial
+neck pain (...) There was no significant difference between the
+two groups in any of the outcome measures. (Refuted)
+In two randomized trials, a single 60-min application of the cap-
+saicin 8% patch reduced pain scores significantly more than a
+low-concentration (0.04%) capsaicin control patch in patients
+with PHN. (Supported)
+Does a herbal com-
+bination of rosemary,
+lovage, and centaury
+relieve symptoms of
+uncomplicated cysti-
+tis? (Supported)
+The herbal medicinal product Canephron ® N contains BNO
+2103, a defined mixture of pulverized rosemary leaves, cen-
+taury herb, and lovage root(...) When given orally, BNO 2103
+reduced inflammation and hyperalgesia in experimental cystitis
+in rats. (Supported)
+Rosmarinus officinalis l., rosemary, is traditionally used to treat
+headache and improve cardiovascular disease partly due to its
+vasorelaxant activity, while the vasorelaxant ingredients remain
+unclear. (Refuted)
+The extracellular
+domain of TMEM27
+is cleaved in hu-
+man beta cells.
+(Supported)
+Here, we report the identification and characterization of trans-
+membrane protein 27 (TMEM27, collectrin) in pancreatic beta
+cells. (Supported)
+We also show that TMEM2 is strongly expressed in endothelial
+cells in the subcapsular sinus of lymph nodes and in the liver
+sinusoid, two primary sites implicated in systemic HA turnover.
+(Refuted)
+Normal expression
+of RUNX1 causes
+tumorsupressing
+effects. (Supported)
+RUNX1 is a well characterized transcription factor essential for
+hematopoietic differentiation and RUNX1 mutations are the cause
+of leukemias. runx1 is highly expressed in normal epithelium of
+most glands and recently has been associated with solid tumors.
+(Refuted)
+RUNX gene over-expression inhibits growth of primary cells but
+transforms cells with tumor suppressor defects, consistent with
+reported associations with tumor progression. (Supported)
+Table 6: Example claims and retrieved evidence from PubMed, using the two different retrieval techniques, where
+only one of them provided a correct final verdict.
+health concerns people search for on the Internet.
+This means there is often systematic reviews done
+on these claims and Wikipedia encourages citing
+systematic reviews in its articles when available.
+We noticed our system often retrieved sentences
+mentioning reviews. Table 5 shows in first three
+rows how this led to the correct verdict prediction
+for Wikipedia, but incorrect for PubMed, since
+the PubMed retriever found standalone studies that
+might disagree from the research consensus. For
+327 claims in HealthFC, combined evidence re-
+trieved from Wikipedia mentions "systematic re-
+view" 89 times, while "Cochrane review"6 is men-
+tioned 60 times (for 1000 claims in PubMedQA,
+the number is 29 and 11). On the other hand, row
+4 of Table 5 shows an example of evidence from
+Wikipedia being too broad and generalized, while
+row 5 shows a claim for which there was simply no
+relevant evidence in the Wikipedia article. For spe-
+cialized claims concerning deeper medical knowl-
+edge or specific research hypotheses, PubMed is a
+superior knowledge base.
+5.2 Precision and Coverage
+The comparison between the two retrieval tech-
+niques in Table 3 shows that semantic search out-
+performs BM25 in all cases, except for CoVERT on
+PubMed (F1: 79.5). Considering that most systems
+from existing work on automated fact-checking use
+only BM25 in their pipelines, these results can mo-
+tivate future research towards deploying semantic
+6Cochrane is an international organization formed to syn-
+thesize medical research findings.
+search with different sentence embedding models.
+Dense retrieval’s ability to deal with synonyms and
+paraphrases is especially important in the med
+
+--- PAGE 9 ---
+paper corpus even further to 20 million abstracts,
+and analyzes other knowledge sources and retrieval
+methods. In Pugachev et al. (2023), the authors
+take consumer-health question datasets and test the
+predictive performance of a system using PubMed
+and Wikipedia. A bigger focus was put on fine-
+tuning the models on different datasets and testing
+the efficiency of built-in searche engines of the re-
+spective databases. Furthermore, Stammbach et al.
+(2023) test the performance of six fact-checking
+datasets from different domains (including encyclo-
+pedic, political) using evidence retrieved from three
+different knowledge bases, while looking solely at
+one biomedical dataset and one retrieval technique
+(BM25). Also related is the work by Sauchuk et al.
+(2022), which shows the clear importance of the
+document-retrieval component of the fact-checking
+pipeline on the performance of the whole system.
+To the best of our knowledge, our paper features
+the biggest corpora (using the entirety of available
+PubMed and Wikipedia dumps, with 20.6M and
+6.6M articles), searches "the whole web", analyzes
+different retrieval techniques (BM25 and semantic),
+and analyzes datasets of different type and purpose:
+expert-geared research claims (SCIFACT and PUB-
+MEDQA), and organic user-posed health claims
+(HEALTH FC and C OVERT).
+7 Conclusion
+In this paper, we conducted a number of ex-
+periments assessing the performance of a fact-
+verification system in an open-domain setting.
+Moving away from the standard setup of a
+small evidence corpus, we expand the knowledge
+sources to two large document bases (PubMed and
+Wikipedia), searching the whole web via Google
+Search API, and experiment with two retrieval tech-
+niques (sparse and dense). We measured the verdict
+prediction performance over four established fact-
+checking datasets. Our results show that search-
+ing for evidence in the open domain provides sat-
+isfyingly high F1 performance, not far from the
+closed-domain setting, with a room for further im-
+provement. We conclude that the knowledge source
+perform comparably, with Wikipedia being better
+for popular and trending claims and PubMed for
+technical inquiries. We demonstrate the general
+superiority of dense retrieval techniques, with ex-
+amples of where it falls short and BM25 retrieval
+would be beneficial. We hope our research will
+encourage more exploration of the open-domain
+setting in the NLP fact-checking community and
+addressing real-world misinformation scenarios.
+Limitations
+In this study, we performed automatic assessment
+of claims related to medicine and health. These are
+two sensitive fields where misinformation, model
+hallucination, and incorrect evidence retrieval can
+lead to harmful consequences, misinformation
+spread, and societal effects. The automated sci-
+entific fact-verification system described in this
+work is still far from being safe and consistent for
+adoption in the real world, due to imperfect per-
+formance and drawbacks that arise. In case such
+an automated fact-verification system would be de-
+ployed and produce misleading verdicts, this could
+decrease the trust in the potential use and develop-
+ment of such solutions.
+In our work, for easier comparison we disregard
+claims annotated with NOT ENOUGH INFORMA -
+TION due to different definitions of this label across
+different datasets and also absence of it in some
+datasets. This is an important label in claim veri-
+fication, since not all claims can be conclusively
+assessed for their veracity. Future work should find
+a way to effectively include this label into model
+predictions. This is especially important in the sci-
+entific domain considering the constantly evolving
+nature of scientific knowledge, and sometimes con-
+flicting evidence from different research studies.
+Lastly, the fact-checking pipeline used in this pa-
+per is a complex system with multiple factors – the
+choice of the retrieval method, of the sentence se-
+lection model, the top k value, the NLI model, and
+
+--- PAGE 10 ---
+References
+Isabelle Augenstein, Christina Lioma, Dongsheng
+Wang, Lucas Chaves Lima, Casper Hansen, Chris-
+tian Hansen, and Jakob Grue Simonsen. 2019. Mul-
+tiFC: A real-world multi-domain dataset for evidence-
+based fact checking of claims. In Proceedings of
+the 2019 Conference on Empirical Methods in Natu-
+ral Language Processing and the 9th International
+Joint Conference on Natural Language Processing
+(EMNLP-IJCNLP), pages 4685–4697, Hong Kong,
+China. Association for Computational Linguistics.
+Razieh Baradaran, Razieh Ghiasi, and Hossein
+Amirkhani. 2022. A survey on machine reading com-
+prehension systems. Natural Language Engineering,
+28(6):683–732.
+Danqi Chen and Wen-tau Yih. 2020. Open-domain
+question answering. In Proceedings of the 58th An-
+nual Meeting of the Association for Computational
+Linguistics: Tutorial Abstracts, pages 34–37, Online.
+Association for Computational Linguistics.
+Thomas Diggelmann, Jordan L. Boyd-Graber, Jannis
+Bulian, Massimiliano Ciaramita, and Markus Leip-
+pold. 2021. Climate-fever: A dataset for verification
+of real-world climate claims. ArXiv, abs/2012.00614.
+Susannah Fox and Maeve Duggan. 2013. Health online
+2013. Health, 2013:1–55.
+Luba Frank, Emmanuel Christodoulou, and Ella A Kaze-
+rooni. 2013. Radiation risk of lung cancer screening.
+Semin. Respir. Crit. Care Med., 34(6):738–747.
+Tianyu Gao, Xingcheng Yao, and Danqi Chen. 2021.
+SimCSE: Simple contrastive learning of sentence em-
+beddings. In Proceedings of the 2021 Conference
+on Empirical Methods in Natural Language Process-
+ing, pages 6894–6910, Online and Punta Cana, Do-
+minican Republic. Association for Computational
+Linguistics.
+Max Glockner, Yufang Hou, and Iryna Gurevych. 2022.
+Missing counter-evidence renders NLP fact-checking
+unrealistic for misinformation. In Proceedings of
+the 2022 Conference on Empirical Methods in Nat-
+ural Language Processing, pages 5916–5936, Abu
+Dhabi, United Arab Emirates. Association for Com-
+putational Linguistics.
+Rita González-Márquez, Luca Schmidt, Benjamin M.
+Schmidt, Philipp Berens, and Dmitry Kobak. 2023.
+The landscape of biomedical research. bioRxiv.
+Einat Gorelik, Reem Masarwa, Amichai Perlman, Vic-
+toria Rotshild, Mordechai Muszkat, and Ilan Matok.
+2018. Systematic review, meta-analysis, and net-
+work meta-analysis of the cardiovascular safety of
+macrolides. Antimicrob. Agents Chemother., 62(6).
+Zhijiang Guo, Michael Schlichtkrull, and Andreas Vla-
+chos. 2022. A survey on automated fact-checking.
+Transactions of the Association for Computational
+Linguistics, 10:178–206.
+Ashim Gupta and Vivek Srikumar. 2021. X-fact: A new
+benchmark dataset for multilingual fact checking. In
+Annual Meeting of the Association for Computational
+Linguistics.
+Pengcheng He, Xiaodong Liu, Jianfeng Gao, and
+Weizhu Chen. 2021. Deberta: Decoding-enhanced
+bert with disentangled attention. In International
+Conference on Learning Representations.
+Harri Hemilä and Elizabeth Chalker. 2013. Vitamin
+C for preventing and treating the common cold.
+Cochrane Database Syst. Rev., 2013(1):CD000980.
+Xuming Hu, Zhijiang Guo, GuanYu Wu, Aiwei Liu,
+Lijie Wen, and Philip Yu. 2022. CHEF: A pilot Chi-
+nese dataset for evidence-based fact-checking. In
+Proceedings of the 2022 Conference of the North
+American Chapter of the Association for Computa-
+tional Linguistics: Human Language Technologies,
+pages 3362–3376, Seattle, United States. Association
+for Computational Linguistics.
+Qiao Jin, Bhuwan Dhingra, Zhengping Liu, William
+Cohen, and Xinghua Lu. 2019. PubMedQA: A
+dataset for biomedical research question answering.
+In Proceedings of the 2019 Conference on Empirical
+Methods in Natural Language Processing and the
+9th International Joint Conference on Natural Lan-
+guage Processing (EMNLP-IJCNLP), pages 2567–
+2577, Hong Kong, China. Association for Computa-
+tional Linguistics.
+Chris Kamphuis, Arjen P de Vries, Leonid Boytsov, and
+Jimmy Lin. 2020. Which bm25 do you mean? a
+large-scale reproducibility study of scoring variants.
+In Advances in Inform
+
+--- PAGE 11 ---
+Elisa Leonardelli, Gavin Abercrombie, Dina Almanea,
+Valerio Basile, Tommaso Fornaciari, Barbara Plank,
+Verena Rieser, Alexandra Uma, and Massimo Poe-
+sio. 2023. SemEval-2023 task 11: Learning with
+disagreements (LeWiDi). In Proceedings of the
+17th International Workshop on Semantic Evaluation
+(SemEval-2023), pages 2304–2318, Toronto, Canada.
+Association for Computational Linguistics.
+Isabelle Mohr, Amelie Wührl, and Roman Klinger. 2022.
+Covert: A corpus of fact-checked biomedical covid-
+19 tweets. In Proceedings of the Language Resources
+and Evaluation Conference , pages 244–257, Mar-
+seille, France. European Language Resources Asso-
+ciation.
+Preslav Nakov, David P. A. Corney, Maram Hasanain,
+Firoj Alam, Tamer Elsayed, Alberto Barr’on-Cedeno,
+Paolo Papotti, Shaden Shaar, and Giovanni Da San
+Martino. 2021. Automated fact-checking for assist-
+ing human fact-checkers. In International Joint Con-
+ference on Artificial Intelligence.
+Dan S Nielsen and Ryan McConville. 2022. Mumin:
+A large-scale multilingual multimodal fact-checked
+misinformation social network dataset. In Proceed-
+ings of the 45th International ACM SIGIR Confer-
+ence on Research and Development in Information
+Retrieval, pages 3141–3153.
+Liangming Pan, Xiaobao Wu, Xinyuan Lu, Anh Tuan
+Luu, William Yang Wang, Min-Yen Kan, and Preslav
+Nakov. 2023. Fact-checking complex claims with
+program-guided reasoning. In Proceedings of the
+61st Annual Meeting of the Association for Compu-
+tational Linguistics (Volume 1: Long Papers), pages
+6981–7004, Toronto, Canada. Association for Com-
+putational Linguistics.
+Alexander Pugachev, Ekaterina Artemova, Alexander
+Bondarenko, and Pavel Braslavski. 2023. Consumer
+health question answering using off-the-shelf com-
+ponents. In European Conference on Information
+Retrieval, pages 571–579. Springer.
+Anna Rogers, Matt Gardner, and Isabelle Augenstein.
+2023. Qa dataset explosion: A taxonomy of nlp
+resources for question answering and reading com-
+prehension. ACM Computing Surveys, 55(10):1–45.
+Arkadiy Saakyan, Tuhin Chakrabarty, and Smaranda
+Muresan. 2021. COVID-fact: Fact extraction and
+verification of real-world claims on COVID-19 pan-
+demic. In Proceedings of the 59th Annual Meet-
+ing of the Association for Computational Linguistics
+and the 11th International Joint Conference on Natu-
+ral Language Processing (Volume 1: Long Papers),
+pages 2116–2129, Online. Association for Computa-
+tional Linguistics.
+Mourad Sarrouti, Asma Ben Abacha, Yassine M’rabet,
+and Dina Demner-Fushman. 2021. Evidence-based
+fact-checking of health-related claims. In Findings
+of the Association for Computational Linguistics:
+EMNLP 2021, pages 3499–3512.
+Artsiom Sauchuk, James Thorne, Alon Halevy, Nicola
+Tonellotto, and Fabrizio Silvestri. 2022. On the role
+of relevance in natural language processing tasks. In
+Proceedings of the 45th International ACM SIGIR
+Conference on Research and Development in Infor-
+mation Retrieval, pages 1785–1789.
+Tal Schuster, Adam Fisch, and Regina Barzilay. 2021.
+Get your vitamin C! robust fact verification with
+contrastive evidence. In Proceedings of the 2021
+Conference of the North American Chapter of the
+Association for Computational Linguistics: Human
+Language Technologies, pages 624–643, Online. As-
+sociation for Computational Linguistics.
+B Søholm. 1998. Clinical improvement of memory and
+other cognitive functions by ginkgo biloba: review
+of relevant literature. Adv. Ther., 15(1):54–65.
+Dominik Stammbach, Boya Zhang, and Elliott Ash.
+2023. The choice of textual knowledge base in au-
+tomated claim checking. ACM Journal of Data and
+Information Quality, 15(1):1–22.
+Briony Swire-Thompson, David Lazer, et al. 2020. Pub-
+lic health and online misinformation: challenges
+and recommendations. Annu Rev Public Health ,
+41(1):433–451.
+James Thorne, Andreas Vlachos, Christos
+Christodoulopoulos, and Arpit Mittal. 2018.
+FEVER: a large-scale dataset for fact extraction
+and VERification. In Proceedings of the 2018
+Conference of the North American Chap
+
+--- PAGE 12 ---
+Juraj Vladika, Phillip Schneider, and Florian Matthes.
+2023b. Healthfc: A dataset of health claims for
+evidence-based medical fact-checking.
+David Wadden, Shanchuan Lin, Kyle Lo, Lucy Lu
+Wang, Madeleine van Zuylen, Arman Cohan, and
+Hannaneh Hajishirzi. 2020. Fact or fiction: Verifying
+scientific claims. In Proceedings of the 2020 Con-
+ference on Empirical Methods in Natural Language
+Processing (EMNLP), pages 7534–7550, Online. As-
+sociation for Computational Linguistics.
+David Wadden, Kyle Lo, Bailey Kuehl, Arman Cohan,
+Iz Beltagy, Lucy Lu Wang, and Hannaneh Hajishirzi.
+2022. SciFact-open: Towards open-domain scientific
+claim verification. In Findings of the Association
+for Computational Linguistics: EMNLP 2022, pages
+4719–4734, Abu Dhabi, United Arab Emirates. As-
+sociation for Computational Linguistics.
+Somin Wadhwa, Vivek Khetan, Silvio Amir, and By-
+ron Wallace. 2023. RedHOT: A corpus of annotated
+medical questions, experiences, and claims on social
+media. In Findings of the Association for Compu-
+tational Linguistics: EACL 2023 , pages 809–827,
+Dubrovnik, Croatia. Association for Computational
+Linguistics.
+Sean Wharton, Salvatore Calanna, Melanie Davies,
+Dror Dicker, Bryan Goldman, Ildiko Lingvay, Ofri
+Mosenzon, Domenica M Rubino, Mette Thomsen,
+Thomas A Wadden, and Sue D Pedersen. 2022. Gas-
+trointestinal tolerability of once-weekly semaglutide
+2.4 mg in adults with overweight or obesity, and the
+relationship between gastrointestinal adverse events
+and weight loss. Diabetes Obes. Metab., 24(1):94–
+105.
+Dustin Wright, Jiaxin Pei, David Jurgens, and Isabelle
+Augenstein. 2022a. Modeling information change in
+science communication with semantically matched
+paraphrases. In Proceedings of the 2022 Conference
+on Empirical Methods in Natural Language Process-
+ing, pages 1783–1807, Abu Dhabi, United Arab Emi-
+rates. Association for Computational Linguistics.
+Dustin Wright, David Wadden, Kyle Lo, Bailey Kuehl,
+Arman Cohan, Isabelle Augenstein, and Lucy Lu
+Wang. 2022b. Generating scientific claims for zero-
+shot scientific fact checking. In Proceedings of the
+60th Annual Meeting of the Association for Compu-
+tational Linguistics (Volume 1: Long Papers), pages
+2448–2460, Dublin, Ireland. Association for Compu-
+tational Linguistics.
+Xia Zeng, Amani S Abumansour, and Arkaitz Zubiaga.
+2021. Automated fact-checking: A survey. Lan-
+guage and Linguistics Compass, 15(10):e12438.
+Zhiwei Zhang, Jiyi Li, Fumiyo Fukumoto, and Yanming
+Ye. 2021. Abstract, rationale, stance: A joint model
+for scientific claim verification. In Proceedings of the
+2021 Conference on Empirical Methods in Natural
+Language Processing, pages 3580–3586.
+2114
+
