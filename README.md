@@ -27,12 +27,39 @@ Both approaches are compared against the paper's published F1 scores (Tables 3 &
 ### Extension
 We build a new test set of ~60 social media posts and run the same pipeline on them.
 
-- **30 English + 30 Spanish** posts collected from Twitter/X
+- **30 English** posts from Twitter/X and Reddit (r/science); **30 Spanish** posts from Twitter/X only
 - Labels: **True / False / Unverifiable**, with two annotators and Cohen's κ reported
 - Spanish posts are machine-translated before retrieval — a controlled comparison
 - Qualitative failure taxonomy alongside quantitative results
 
 **Core question:** How much does performance drop when the pipeline — built for formal scientific claims — faces informal, noisy social media text? Does it differ between English and Spanish?
+
+## English Dataset — Annotation Summary
+
+30 posts collected from Twitter/X (22) and Reddit r/science (8), covering a range of science and health topics.
+
+**Topic areas:** Astronomy, Animal Behavior, Climate, Fertility, Genetics, Health, Marine Biology, Mental Health, Neurology, Neuroscience, Oncology, Pharmaceuticals, Pregnancy, Psychiatry, Quantum Physics, Vaccines, Vaping, Wildlife
+
+**Gold label distribution (30 posts):**
+
+| Label | Count |
+|-------|-------|
+| TRUE | 16 |
+| FALSE | 3 |
+| UNVERIFIABLE | 11 |
+
+**Inter-annotator agreement:**
+
+| Metric | Value |
+|--------|-------|
+| Agreements | 24 / 30 (80%) |
+| Disagreements | 6 |
+| Cohen's κ | 0.5395 |
+| κ interpretation | Moderate (0.4–0.6) |
+
+All 6 disagreements used the `EVIDENCE` code (annotators agreed a scientific claim was present but weighted evidence differently). Pipeline predictions are pending.
+
+---
 
 ## Spanish Dataset — Annotation Summary
 
@@ -204,7 +231,7 @@ Free, no billing required.
 - Write the Replication section of the report (our numbers vs. published numbers)
 
 ### Mateus — Data & Annotation (English)
-- Collect 30 English posts from Twitter/X containing scientific claims
+- Collect 30 English posts from Twitter/X and Reddit (r/science) containing scientific claims
 - Label each post: True / False / Unverifiable
 - Cross-annotate a shared sample with Claudia to report Cohen's κ
 - Write and maintain the annotation guidelines document
