@@ -7,6 +7,12 @@
 
 ## 1. The Two Reproduction Runs
 
+### Why we do not run the original pipeline as-is
+
+The original paper's pipeline requires large local data dumps to perform retrieval: a 6.6M-article Wikipedia corpus and a 20.6M-abstract MEDLINE dump. Downloading and indexing these is not feasible in our setting — the data alone runs to tens of gigabytes, and running BM25 or semantic search over them locally would take an impractical amount of time and compute. The paper's authors did provide their pre-computed retrieval results, which is what makes Run 1 possible. For Run 2 we replace the local dumps with public APIs, which allows us to re-run the full pipeline without needing the original corpora.
+
+---
+
 ### Run 1 — Step-3-Only (`reproduction/step3-only/`)
 
 Loads the pre-computed retrieval results provided by the paper's authors (`reference/evidence/`) and runs only **Step 3: Verdict Prediction**. No retrieval or evidence selection is re-run.
