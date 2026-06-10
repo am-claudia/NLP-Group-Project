@@ -9,13 +9,15 @@
 
 ### Run 1 — Step-3-Only (`reproduction/step3-only/`)
 
-Loads the pre-computed retrieval results provided by the paper's authors (`reference/evidence/`) and runs only **Step 3: Verdict Prediction** using DeBERTa-v3-large NLI. No retrieval or evidence selection is re-run.
+Loads the pre-computed retrieval results provided by the paper's authors (`reference/evidence/`) and runs only **Step 3: Verdict Prediction**. No retrieval or evidence selection is re-run.
+
+Step 3 uses a **Natural Language Inference (NLI)** model — specifically DeBERTa-v3-large fine-tuned on MNLI, FEVER, and ANLI. NLI is the task of deciding whether a *hypothesis* (the claim) is entailed by, contradicted by, or neutral with respect to a *premise* (the retrieved evidence). Here the model outputs a probability distribution over three classes: entailment, contradiction, and neutral. We map entailment → **SUPPORTED** and contradiction → **REFUTED**, discarding neutral.
 
 Evidence sources available: Wikipedia BM25, Wikipedia Semantic, PubMed BM25, PubMed Semantic, Google.
 
 **Datasets:** SciFact (693), PubMedQA (890), HealthFC (327), CoVERT (264) — after filtering NEI-labelled claims.
 
-**Purpose:** Validates our reproduction of the NLI component and label normalisation against the paper's published F1 scores (Tables 3 & 4).
+**Purpose:** We noticed a discrepancy in how the original notebook annotated / normalised labels across datasets (e.g. HealthFC's `0` means SUPPORTED, not REFUTED; PubMedQA uses string labels `"yes"`/`"no"`). We corrected these and reran verdict prediction using the same pre-computed evidence to quantify how much the label errors affected the reported results.
 
 ---
 
@@ -27,7 +29,7 @@ Re-runs the **full three-step pipeline** from scratch using public APIs instead 
 - **Step 2 — Evidence Selection:** SPICED sentence similarity, top-10 sentences (unchanged from paper)
 - **Step 3 — Verdict Prediction:** DeBERTa-v3-large NLI (unchanged from paper)
 
-**Purpose:** Tests the pipeline end-to-end with independently retrieved evidence. Results are not expected to match exactly — different corpus coverage and retrieval method.
+**Purpose:** We re-run the full pipeline for the two knowledge sources most relevant to tweet verification — Wikipedia and PubMed. We use API queries rather than local data dumps because we need fast, lightweight retrieval that does not require downloading multi-gigabyte corpora. From Run 1, Wikipedia and PubMed already show the strongest results on **CoVERT**, which is the dataset closest in format to social media posts (tweets), making them the most promising sources for our extension. Google was excluded: it requires a Custom Search API with a hard limit of 100 queries per day (far below the ~2,174 needed to run all four datasets once) and its configuration is fragile — results depend heavily on the search engine setup and do not replicate the Google Scholar results used in the original paper.
 
 ---
 
@@ -130,7 +132,7 @@ F1 scores (binary, `average='binary'`). Paper values from Tables 3 & 4 of Vladik
 
 ## 4. Key Observations
 
-- **Step-3-only results closely match the paper** for Wikipedia and PubMed BM25/Semantic, confirming our label normalisation and NLI setup are correct.
+- **Step-3-only results closely match the paper** for Wikipedia and PubMed BM25/Semantic, confirming our label normalisation corrections and NLI setup are correct.
+- **CoVERT benefits most from Wikipedia and PubMed** across all retrieval methods in Run 1, reinforcing their suitability for tweet-format claims.
 - **Wikipedia API pipeline** results are broadly comparable to the paper's Wikipedia BM25 baseline, with some variation per dataset — expected given different corpus coverage and retrieval method.
-- **Google results diverge substantially** from the paper. The Custom Search API does not replicate Google Scholar results used in the original study.
 - PubMed API pipeline results are pending.
