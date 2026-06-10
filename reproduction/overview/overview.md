@@ -111,7 +111,6 @@ F1 scores (binary, `average='binary'`). Paper values from Tables 3 & 4 of Vladik
 | CoVERT | 72.3 | 54.0 |
 | **Average** | **77.0** | **64.9** |
 
-> Note: Google results are notably lower than the paper. The Google Custom Search API returns different results from the paper's Google Scholar search used during the original experiment.
 
 ---
 
@@ -129,10 +128,11 @@ F1 scores (binary, `average='binary'`). Paper values from Tables 3 & 4 of Vladik
 
 | Dataset | Paper (BM25) | PubMed API Ours |
 |---------|--------------|-----------------|
-| SciFact | 76.1 | *(pending)* |
-| PubMedQA | 70.3 | *(pending)* |
-| HealthFC | 69.7 | *(pending)* |
-| CoVERT | 79.5 | *(pending)* |
+| SciFact | 76.1 | 76.5 |
+| PubMedQA | 70.3 | 71.8 |
+| HealthFC | 69.7 | 71.9 |
+| CoVERT | 79.5 | 70.2 |
+| **Average** | **73.9** | **72.6** |
 
 ---
 
@@ -141,4 +141,5 @@ F1 scores (binary, `average='binary'`). Paper values from Tables 3 & 4 of Vladik
 - **Step-3-only results closely match the paper** for Wikipedia and PubMed BM25/Semantic, confirming our label normalisation corrections and NLI setup are correct.
 - **CoVERT benefits most from Wikipedia and PubMed** across all retrieval methods in Run 1, reinforcing their suitability for tweet-format claims.
 - **Wikipedia API pipeline** results are broadly comparable to the paper's Wikipedia BM25 baseline, with some variation per dataset — expected given different corpus coverage and retrieval method.
-- PubMed API pipeline results are pending.
+- **PubMed API pipeline** results are also competitive with the paper's PubMed BM25 baseline overall, with a larger drop on CoVERT — possibly because API keyword search returns fewer relevant abstracts for tweet-style short claims than a full local index would.
+- **For the tweet extension**, Wikipedia API is the most robust choice: it matches or exceeds the paper on SciFact, PubMedQA, and HealthFC, and CoVERT results are consistent with step-3-only Wikipedia. PubMed API is a good complement for health-related claims.
