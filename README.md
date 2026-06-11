@@ -177,7 +177,7 @@ NLP-Group-Project/
 | `reference/` | Paper's original code and pre-computed evidence. Not modified. | Done |
 | `reproduction/step3-only/` | Replication approach 1: NLI only on paper's evidence, corrected labels. | Done |
 | `reproduction/api-pipeline/` | Replication approach 2: full pipeline re-run via public APIs. | Done |
-| `pipeline/` | Extension: run on 60 tweet dataset. | Notebook ready — pending Colab run |
+| `pipeline/` | Extension: run on 60 tweet dataset. | Done |
 
 ---
 
