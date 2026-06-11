@@ -1,0 +1,3 @@
+dataset,precision,recall,f1,accuracy,n_scored,n_total
+tweets_en,100.0,87.5,93.3,89.5,19,30
+tweets_es,62.5,76.9,69.0,59.1,22,30

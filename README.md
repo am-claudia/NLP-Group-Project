@@ -152,9 +152,15 @@ NLP-Group-Project/
 │           ├── Wikipedia API/     # metrics.csv + retrieved evidence lines
 │           └── PubMed API/        # metrics.csv + retrieved evidence lines
 │
-├── pipeline/                      # Tweet verification pipeline (to be built — Andrea)
-│                                  # Will run the best-performing configuration from
-│                                  # reproduction/ on the 60 English/Spanish social media posts
+├── pipeline/                      # Tweet verification pipeline (Andrea)
+│   │                              # Runs the api-pipeline (Wikipedia API + PubMed API,
+│   │                              # SPICED, DeBERTa NLI) on the 60 English/Spanish social
+│   │                              # media posts and compares against SciFact/CoVERT baselines
+│   ├── open_domain_claim_verification_tweets.ipynb
+│   └── results/
+│       ├── Wikipedia API/         # metrics.csv, predictions.csv, retrieved evidence lines
+│       ├── PubMed API/            # metrics.csv, predictions.csv, retrieved evidence lines
+│       └── comparison/            # extension_vs_baseline.csv, failure_candidates.csv
 │
 └── documentation/
     ├── 2024.eacl-long.128.pdf     # Reference paper
@@ -171,7 +177,7 @@ NLP-Group-Project/
 | `reference/` | Paper's original code and pre-computed evidence. Not modified. | Done |
 | `reproduction/step3-only/` | Replication approach 1: NLI only on paper's evidence, corrected labels. | Done |
 | `reproduction/api-pipeline/` | Replication approach 2: full pipeline re-run via public APIs. | Done |
-| `pipeline/` | Extension: run on 60 tweet dataset. | To do |
+| `pipeline/` | Extension: run on 60 tweet dataset. | Notebook ready — pending Colab run |
 
 ---
 

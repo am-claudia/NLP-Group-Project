@@ -1,0 +1,9 @@
+knowledge_source,dataset,precision,recall,f1,accuracy,n_scored,n_total
+Wikipedia API,scifact,73.5,83.3,78.1,,,
+Wikipedia API,covert,79.2,59.6,68.0,,,
+Wikipedia API,tweets_en,100.0,68.8,81.5,73.7,19,30
+Wikipedia API,tweets_es,62.5,76.9,69.0,59.1,22,30
+PubMed API,scifact,75.3,77.6,76.5,,,
+PubMed API,covert,79.1,63.1,70.2,,,
+PubMed API,tweets_en,100.0,87.5,93.3,89.5,19,30
+PubMed API,tweets_es,62.5,76.9,69.0,59.1,22,30

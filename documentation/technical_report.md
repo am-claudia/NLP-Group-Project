@@ -322,3 +322,165 @@ BM25 requires only the inverted index, which is built once (~1.6 hours CPU) and 
 ### Reporting note
 
 When reporting replication numbers, state explicitly: *"evaluated on the first 100 claims of the SciFact test set"*. This distinguishes our figures from the paper's full-test-set numbers (which used all ~300 SciFact test claims) and lets readers interpret any gap correctly.
+
+---
+
+## 6. Extension Results
+
+### Setup
+
+The replicated 3-step pipeline (document retrieval → SPICED evidence selection → DeBERTa-v3-large NLI) was applied **unchanged** to a new dataset of **60 bilingual social media posts about scientific claims** (30 English, 30 Spanish), annotated by the team (see `data/Annotation_Guidelines_Bilingual.md`, Cohen's κ = 0.54 for English, κ = 0.898 for Spanish).
+
+- **English** posts use the `Tweet Text (English)` column directly.
+- **Spanish** posts use the `MT Translation (EN)` column (machine-translated to English by Claudia), since the retrieval models and DeBERTa NLI model are English-only.
+- **Knowledge sources:** both **Wikipedia API** and **PubMed API** were run, since the dataset mixes general and health-related scientific claims (cf. `reproduction/overview/overview.md`, §4: *"Wikipedia API is the most robust choice... PubMed API is a good complement for health-related claims"*).
+- **Wikipedia retrieval fix:** an initial run returned almost no Wikipedia evidence for *any* claim, in either language. The cause was the `wikipedia` PyPI package's default `User-Agent` header (`wikipedia (https://github.com/goldsmith/Wikipedia/)`), which Wikimedia now rate-limits/blocks (HTTP 429 "You are making too many requests", or HTTP 403 with no User-Agent at all — see Wikimedia's [User-Agent policy](https://meta.wikimedia.org/wiki/User-Agent_policy)). Setting a unique, descriptive `User-Agent` (`pipeline/open_domain_claim_verification_tweets.ipynb`, Setup cell) fixed the API-blocking issue. The results below were produced with this fix applied — but as the "Retrieval coverage" section shows, fixing the *blocking* issue exposed *further*, dataset-specific retrieval problems that the User-Agent fix alone does not solve.
+
+### Evaluation methodology
+
+Each of the 60 posts was annotated **TRUE**, **FALSE**, or **UNVERIFIABLE**. Precision, recall, F1, and accuracy are computed on the **TRUE/FALSE subset only** — UNVERIFIABLE posts have no SUPPORTED/REFUTED ground truth, so they cannot contribute to a binary classification score. This is the same convention used for NEI-labelled claims in SciFact/PubMedQA/HealthFC/CoVERT (§5 and `documentation/step3_notebook_notes.md`).
+
+| Dataset | TRUE | FALSE | UNVERIFIABLE | Scoreable (TRUE+FALSE) |
+|---|---|---|---|---|
+| English tweets | 16 | 3 | 11 | 19 / 30 |
+| Spanish tweets | 13 | 9 | 8 | 22 / 30 |
+
+The pipeline still produces a SUPPORTED/REFUTED prediction for **every** post, including UNVERIFIABLE ones — these are retained in `*_predictions.csv` and reviewed in the Failure Analysis (§7) below, since a forced verdict on a claim that cannot be verified is itself an informative failure mode.
+
+### Results
+
+| Knowledge source | Dataset | Precision | Recall | F1 | Accuracy | Scored |
+|---|---|---|---|---|---|---|
+| Wikipedia API | SciFact (baseline) | 73.5 | 83.3 | 78.1 | — | — |
+| Wikipedia API | CoVERT (baseline) | 79.2 | 59.6 | 68.0 | — | — |
+| Wikipedia API | tweets_en | 100.0 | 68.8 | 81.5 | 73.7 | 19/30 |
+| Wikipedia API | tweets_es | 62.5 | 76.9 | 69.0 | 59.1 | 22/30 |
+| PubMed API | SciFact (baseline) | 75.3 | 77.6 | 76.5 | — | — |
+| PubMed API | CoVERT (baseline) | 79.1 | 63.1 | 70.2 | — | — |
+| PubMed API | tweets_en | 100.0 | 87.5 | 93.3 | 89.5 | 19/30 |
+| PubMed API | tweets_es | 62.5 | 76.9 | 69.0 | 59.1 | 22/30 |
+
+*(Source: `pipeline/results/comparison/extension_vs_baseline.csv`. Baseline rows are copied from `reproduction/api-pipeline/results/{Wikipedia API,PubMed API}/metrics.csv`, which do not report accuracy or scored counts.)*
+
+At face value, `tweets_en` (PubMed API) beats both baselines on F1, and `tweets_en` (Wikipedia API) beats CoVERT. Both `tweets_es` rows trail CoVERT and SciFact by ~7-9 F1 points. The "Retrieval coverage" and "Comparison against a trivial baseline" subsections below show why these headline numbers should **not** be read at face value.
+
+### Retrieval coverage: how much evidence did the pipeline actually find?
+
+For each claim, Step 1 (document retrieval) either returns ≥1 article (whose sentences feed Step 2/3) or returns nothing — in which case the DeBERTa input degenerates to `"<claim> [SEP] "`, i.e. the verdict is based on the **claim text alone**, with zero external evidence.
+
+| Knowledge source | Dataset | Claims with non-empty retrieved evidence |
+|---|---|---|
+| Wikipedia API | tweets_en | 13 / 30 |
+| Wikipedia API | tweets_es | 0 / 30 |
+| PubMed API | tweets_en | 8 / 30 |
+| PubMed API | tweets_es | 1 / 30 |
+
+Two distinct, dataset-specific problems are visible here:
+
+**1. English Wikipedia retrieval now *works*, but the queries are too noisy to find the right article.** After fixing the User-Agent, `wikipedia.search()` returns results for 13/30 English claims — but inspecting `tweets_en_wiki_api_titles.txt` shows most of these are off-topic. For example, EN-02 ("RECENT: Study finds just one minute of anger weakens the immune system for 5 hours") returns *A Treatise of Human Nature*, *List of The Expanse episodes*, *Iran hostage crisis*, *2026 Iran war*, *Nikita Khrushchev*, and similar — none related to anger, immunology, or the underlying study. The pipeline sends the **entire tweet** as a literal `wikipedia.search()` query; MediaWiki's search tokenizes this into ~15-30 words and returns whichever articles share the most individual word matches, which for informal multi-clause tweet text is rarely the article actually being referenced.
+
+**2. Spanish (MT-translated) claims return zero Wikipedia results, even with the fix.** Across all 30 `tweets_es` claims, `wikipedia.search()` returned no fetchable results — 0/30 non-empty, unchanged by the User-Agent fix. The most likely cause is **claim length**: the Spanish dataset's `MT Translation (EN)` column is on average more than twice as long as the English tweets (mean 392.9 vs. 188.0 characters; *every* Spanish claim is ≥199 characters — already at the English median). Within the English dataset alone, claims under 200 characters returned non-empty Wikipedia evidence 69% of the time (11/16), vs. only 14% (2/14) for claims ≥200 characters — and the **entire** Spanish dataset falls in that high-failure length range (median 283.5, max 971 characters). Machine translation tends to preserve or expand the original tweet's hashtags, emoji-derived text, and multi-sentence structure, compounding the problem for Spanish specifically.
+
+**3. PubMed retrieval has its own, largely independent near-total failure**, consistent with `reproduction/api-pipeline`: `Entrez.esearch()` runs without error but returns `Count: 0` for almost all literal-tweet-text queries — only 8/30 English and 1/30 Spanish claims returned any abstracts.
+
+Net effect: **48/60 (80%) of all claim × knowledge-source combinations had zero retrieved evidence**, and DeBERTa's verdict was based on the bare claim text.
+
+### Comparison against a trivial "always predict TRUE" baseline
+
+Given gold-label distributions of 16 TRUE / 3 FALSE (English, 19 scoreable) and 13 TRUE / 9 FALSE (Spanish, 22 scoreable), a trivial classifier that always predicts SUPPORTED scores:
+
+| Dataset | Precision | Recall | F1 | Accuracy |
+|---|---|---|---|---|
+| tweets_en (trivial "always TRUE") | 84.2 | 100.0 | 91.4 | 84.2 |
+| tweets_es (trivial "always TRUE") | 59.1 | 100.0 | 74.3 | 59.1 |
+
+- **`tweets_en` / Wikipedia API (F1 81.5, accuracy 73.7) is *worse* than the trivial baseline on both metrics.** The 13/30 claims that now retrieve real-but-often-irrelevant Wikipedia evidence push several previously-"default SUPPORTED" TRUE claims toward REFUTED — 5 false negatives in total (EN-06, EN-08, EN-09, EN-19, EN-30; see §7 Cases 1-3).
+- **`tweets_en` / PubMed API (F1 93.3, accuracy 89.5) is the only extension result that beats the trivial baseline**, by +1.9 F1 / +5.3 accuracy — but with only 8/30 claims retrieving any PubMed evidence, most of this margin still reflects the same "mostly-TRUE dataset + default-to-SUPPORTED" effect as the trivial baseline, not genuine evidence-based verification.
+- **`tweets_es` (both sources, identical 69.0 F1 / 59.1 accuracy)**: accuracy exactly matches the trivial baseline (13/22 correct either way), but F1 is *lower* (69.0 vs. 74.3) — the no-evidence model correctly flags 3/9 FALSE claims as REFUTED (which the trivial baseline never does), but at the cost of incorrectly flagging 3/13 TRUE claims as REFUTED, netting out to a worse F1 under this class imbalance.
+
+### Discussion
+
+- **The "PubMed API beats CoVERT/SciFact on `tweets_en`" headline is not evidence the pipeline works well on tweets** — it is close to a restatement of the English dataset's 16:3 TRUE:FALSE imbalance, achieved with real PubMed evidence for only 8/30 claims.
+- **Fixing the Wikipedia User-Agent bug *worsened* the English Wikipedia score** relative to the trivial baseline (81.5 F1 / 73.7 accuracy vs. 91.4 / 84.2): the newly-retrieved evidence is frequently topically irrelevant (§7 Case 2) or selects the wrong sentences from a relevant article (§7 Case 3), and DeBERTa treats irrelevant or non-supporting evidence as grounds for REFUTED even when the claim is TRUE. Fixing the *infrastructure* bug (User-Agent) was necessary but not sufficient — it surfaced a deeper *query-formulation* bug.
+- **English vs. Spanish is confounded by claim length, not (only) language or translation quality.** The Spanish dataset's MT-translated claims are systematically ~2x longer than the English tweets, which is the most parsimonious explanation for why Wikipedia retrieval returns 0/30 for Spanish — the same length effect already degrades English retrieval for claims over ~200 characters.
+- **Across both languages, 80% of claim × source pairs (48/60) produced zero retrieved evidence**, meaning the "3-step pipeline" effectively collapses to "Step 3 only: DeBERTa NLI on the bare claim text" for the large majority of this dataset.
+- **For a misinformation-detection use case, the most actionable failure is the FALSE-claims pattern in §7 Case 5:** with no evidence, the model defaults toward SUPPORTED for most claims — the worst possible default for flagging health misinformation.
+
+---
+
+## 7. Failure Analysis
+
+`pipeline/results/comparison/failure_candidates.csv` lists every TRUE/FALSE post the pipeline scored incorrectly, plus every UNVERIFIABLE post (for which the pipeline always forces a SUPPORTED/REFUTED verdict). The 8 cases below were selected to cover each taxonomy category and both knowledge sources/languages.
+
+### Taxonomy categories
+
+| # | Category | Description |
+|---|---|---|
+| 1 | Irrelevant retrieval | Retrieved Wikipedia/PubMed article doesn't match the claim's topic |
+| 2 | Evidence-selection mismatch | Right article retrieved, but SPICED picked unrelated sentences |
+| 3 | Informal-language NLI failure | Evidence is relevant, but DeBERTa fails on informal/sarcastic/ambiguous tweet phrasing |
+| 4 | Forced verdict on UNVERIFIABLE | Pipeline confidently outputs SUPPORTED/REFUTED for a claim annotators couldn't verify |
+| 5 | MT-translation-induced retrieval failure (Spanish only) | The MT translation process produces claim text too long/verbose for the retrieval APIs to return any results |
+| 6 | Numeric/statistical precision | Claim hinges on a specific number/statistic the evidence doesn't address |
+| 7 | Empty-evidence default bias | With zero retrieved evidence, the verdict is driven by claim phrasing alone, with an inconsistent — and often FALSE-claim-friendly — bias toward SUPPORTED |
+
+### Documented cases
+
+**Case 1 — EN-09 — Category 3 (Informal-language NLI failure)**
+- Claim: *"Revolution's pancreatic cancer drug doubles survival, boosts quality of life"*
+- Gold: TRUE (SUPPORTED) — Predicted: REFUTED
+- Evidence (Wikipedia API, excerpt): *"31 May – a phase 3 trial published in the New England Journal of Medicine reports that daraxonrasib, an investigational oral RAS(ON) inhibitor, nearly doubles median overall survival in patients with previously treated metastatic pancreatic cancer, from 6.6 months with standard chemotherapy to 13.2 [months]..."*
+- Hypothesis: this is the most striking failure in the dataset — retrieval and evidence selection both worked (the evidence is topically correct *and* numerically confirms "doubles survival": 13.2 / 6.6 ≈ 2.0×), yet DeBERTa predicted REFUTED. The claim refers to the drug informally as *"Revolution's [drug]"* (a company/brand reference), while the evidence names it by its generic compound name *"daraxonrasib"* and class *"RAS(ON) inhibitor"*. DeBERTa appears unable to bridge this entity-naming gap, treating the passage as *about a different drug* and therefore non-supporting. This rules out Category 6 (the number itself isn't the problem) and points to claim-evidence entity linking as the failure point.
+
+**Case 2 — EN-19 — Category 1 (Irrelevant retrieval)**
+- Claim: *"A new study in Geophysical Research Letters provides robust confirmation that northern hemisphere atmospheric circulation on the largest scale is responding to greenhouse gas emissions."*
+- Gold: TRUE (SUPPORTED) — Predicted: REFUTED
+- Evidence (Wikipedia API, excerpt): *"14 May — astronomers publish supporting evidence of water plume activity on Europa, moon of the planet Jupiter... On 20 June, NASA reported that the dust storm had grown to c[over...]"*
+- Hypothesis: a textbook irrelevant-retrieval failure. The claim's vocabulary ("study", "robust confirmation", "largest scale", "responding to") is generic science-news phrasing that, fed verbatim into `wikipedia.search()`, surfaces an unrelated "year in science" timeline article (planetary science / Jupiter), not anything about atmospheric circulation or climate. DeBERTa correctly judges this Europa/Jupiter passage as unrelated to — and therefore not supporting — the claim, producing a confident but topically baseless REFUTED.
+
+**Case 3 — EN-30 — Category 2 (Evidence-selection mismatch)**
+- Claim: *"Bumblebees know how to problem solve their way to a reward."*
+- Gold: TRUE (SUPPORTED) — Predicted: REFUTED
+- Evidence (Wikipedia API, excerpt): *"Bumblebees gather nectar to add to the stores in the nest, and pollen to feed their young. === Communication and social learning === Bumblebees do not have ears, and it is not known whether or how well they can hear. Bumblebees have also been observed to engage in social learning..."*
+- Hypothesis: unlike Cases 1-2, retrieval got the **right article** ("Bumblebee" — topically correct). But SPICED's top-k sentence selection picked passages about foraging behaviour and social learning/communication, not the article's content on cognition or problem-solving (the Wikipedia "Bumblebee" article does cover cognition elsewhere). DeBERTa then sees evidence that is bumblebee-related but doesn't address "problem solving for a reward", and predicts REFUTED. This is a pure Step-2 (SPICED) failure with correct Step-1 retrieval.
+
+**Case 4 — EN-02 — Category 1 (Irrelevant retrieval, "right for the wrong reason")**
+- Claim: *"RECENT: Study finds just one minute of anger weakens the immune system for 5 hours"*
+- Gold: FALSE (REFUTED) — Predicted: REFUTED ✓ (counted as correct)
+- Evidence (Wikipedia API, excerpt): *"...passions arising from 'the mixture of love and hatred with other emotions'. Unsurprisingly, the violence of a passion makes it stronger... Hume focuses on the factors which increase the violence of passions..."* (retrieved from David Hume's *A Treatise of Human Nature*)
+- Hypothesis: this prediction is scored "correct", but for the wrong reason. The retrieved evidence is about 18th-century philosophy of emotion, not immunology — `wikipedia.search()` matched on shared words like "anger"/"passions" and "minute"/"violence" rather than topic. With completely irrelevant evidence, DeBERTa appears to default toward REFUTED (the inverse of the no-evidence default-to-SUPPORTED bias in Case 5), which happens to align with the FALSE gold label here. This case is a reminder that the headline accuracy/F1 numbers contain "accidentally correct" predictions that don't reflect genuine fact-checking.
+
+**Case 5 — ES-08, ES-09, ES-14, ES-17, ES-19 (grouped) — Category 7 (Empty-evidence default bias)**
+- Claims: 5 Spanish health-misinformation tweets — claiming COVID vaccines deplete white blood cells in "calculated waves" (ES-08), chlorine dioxide cures stage-4 prostate cancer (ES-09), skin warts are caused by insulin/cortisol dysregulation (ES-14), glyphosate causes the rise in celiac disease (ES-17), and aspartame permanently damages the brain/CNS (ES-19).
+- Gold: all 5 are FALSE (REFUTED) — Predicted: all 5 SUPPORTED
+- Evidence: empty for all 5, both knowledge sources (Wikipedia API: 0/30 for `tweets_es`; PubMed API: empty for these 5 specifically).
+- Hypothesis: this is the single most policy-relevant failure in the dataset. With zero retrieved evidence, DeBERTa's verdict is based purely on the claim text — and confidently-worded, declarative misinformation ("X causes Y", "this doctor explains exactly...") reads to the model as plausible/supportable, regardless of its actual truth value. **5/5 of the FALSE-labelled Spanish misinformation claims were predicted SUPPORTED.** A claim-verification pipeline that cannot distinguish confidently-stated misinformation from confidently-stated facts — when it has no evidence — is, for this exact use case, actively counterproductive.
+
+**Case 6 — ES-18, ES-20, ES-24 (grouped) — Category 7 (Empty-evidence default bias, inverse direction)**
+- Claims: ES-18 (zero screen time recommended for under-6s; "biggest brain hack in history"), ES-20 (ADHD involves prefrontal-cortex dopamine deficiency, linked to screen affinity), ES-24 (turmeric as effective as ibuprofen for knee osteoarthritis).
+- Gold: all 3 are TRUE (SUPPORTED) — Predicted: all 3 REFUTED
+- Evidence: empty for all 3 (both sources).
+- Hypothesis: shows the Case-5 "default to SUPPORTED" bias is **not** a uniform rule — for these 3 TRUE claims (also evidence-free), the model defaulted to REFUTED instead. All three are framed as precise causal/mechanistic or comparative-efficacy statements ("X is as effective as Y", "the alteration is Z, that's why..."), which may read to DeBERTa as over-specific/strong claims more typical of the REFUTED class in its NLI training data. Net effect: with no evidence, the no-evidence verdict is essentially a coin-flip driven by surface phrasing, not claim veracity — 10/13 evidence-free TRUE claims and only 3/9 evidence-free FALSE claims were predicted SUPPORTED.
+
+**Case 7 — Wikipedia API, `tweets_es`, all 30 claims — Category 5 (MT-translation-induced retrieval failure)**
+- Claims: the entire Spanish dataset (`MT Translation (EN)` column).
+- Gold: mixed — Predicted: 0/30 claims have any retrieved Wikipedia evidence.
+- Hypothesis: see "Retrieval coverage" in §6. The Spanish dataset's MT translations average 392.9 characters (vs. 188.0 for English), and every single one is ≥199 characters — already at the English median, and well past the ~200-character point where English retrieval success drops from 69% to 14%. This is a **retrieval-formulation** failure specific to how MT-translated claims are fed into `wikipedia.search()`, not a translation-*accuracy* failure (the `looks_untranslated()` check confirms all 30 are genuinely translated to English).
+
+**Case 8 — EN-13 — Category 1 + 4 (Irrelevant retrieval + Forced verdict on UNVERIFIABLE)**
+- Claim: *"'Alien' DNA found inside humans — it was inserted into our genes, mind-blowing study published in Oct, 2025 says."*
+- Gold: UNVERIFIABLE — Predicted: REFUTED
+- Evidence (Wikipedia API, excerpt): *"The purported interstellar meteorite, technically known as CNEOS 2014-01-08, impacted Earth in 2014... 27 April — a lineage of H3N8 bird flu is found to infect humans for the f[irst time...]"* (from a "Year in science" timeline article)
+- Hypothesis: `wikipedia.search()` matched on "alien"/"inserted"/"genes"/"study" and surfaced a science-timeline article containing an unrelated item about an interstellar meteorite and an unrelated item about bird flu crossing into humans — both superficially "foreign thing entering/infecting" stories, but neither about horizontal gene transfer or "alien DNA". DeBERTa confidently predicts REFUTED against this irrelevant evidence. Because the claim is UNVERIFIABLE, this "REFUTED" is neither right nor wrong against gold — but it illustrates that the pipeline produces a *confident, evidence-cited-looking* verdict for a claim the human annotators explicitly could not adjudicate.
+
+### Summary observations
+
+- **Category 7 (empty-evidence default bias) is the most consequential failure mode**, affecting 48/60 (80%) of claim × source combinations — for these, the entire 3-step pipeline reduces to "DeBERTa NLI on the bare claim text".
+- **The bias is asymmetric and dangerous for misinformation detection**: across both languages, 19 UNVERIFIABLE posts received a forced verdict, with 14/19 (74%) predicted SUPPORTED — and, more importantly, **5/5 FALSE-labelled Spanish misinformation claims with no evidence were predicted SUPPORTED** (Case 5). A tool meant to flag health misinformation is, in its current form, biased toward validating it when retrieval fails — which is most of the time.
+- **Fixing the User-Agent bug was necessary but revealed a second-order bug**: 13/30 English claims now retrieve *real* Wikipedia evidence, but it is frequently irrelevant (Cases 2, 4, 8) or mis-selected by SPICED (Case 3) — and this newly-introduced "noise" evidence *reduced* the English Wikipedia F1/accuracy below the trivial baseline (Case 1, and §6).
+- **Spanish retrieval (Wikipedia: 0/30) is best explained by claim length, not translation quality** — MT translations are ~2x longer than the original-language English tweets (Case 7).
+- **Recommended next steps, in priority order:**
+  1. **Add a "NOT ENOUGH EVIDENCE" output class** for the 80% of cases with zero retrieved evidence, instead of forcing SUPPORTED/REFUTED — directly addresses Categories 4 and 7, the largest and most dangerous failure modes.
+  2. **Replace literal-tweet-as-query with key-phrase/entity extraction** before calling `wikipedia.search()` / `Entrez.esearch()` — would likely fix the irrelevant-retrieval cases (2, 4, 8) and may also shorten Spanish queries enough to return Wikipedia results (Case 7).
+  3. **For Spanish specifically**, consider truncating/summarizing the `MT Translation (EN)` text before retrieval, or querying `es.wikipedia.org` directly with the original Spanish text and translating only the retrieved evidence.
+  4. **Improve SPICED evidence selection** (e.g., re-rank by entity overlap with the claim, not just sentence-level cosine similarity) to address cases like EN-30 (Case 3) where the right article is retrieved but the wrong sentences are selected.
